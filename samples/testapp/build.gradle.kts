@@ -134,6 +134,7 @@ kotlin {
                 implementation(compose.components.resources)
                 implementation(compose.components.uiToolingPreview)
                 implementation(compose.materialIconsExtended)
+                implementation(libs.jetbrains.navigationevent.compose)
                 implementation(libs.jetbrains.navigation.compose)
                 implementation(libs.jetbrains.navigation.runtime)
                 implementation(libs.jetbrains.lifecycle.viewmodel.compose)

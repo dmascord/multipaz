@@ -51,7 +51,8 @@ fun StartScreen(
     onClickRichText: () -> Unit = {},
     onClickNotifications: () -> Unit = {},
     onClickScreenLock: () -> Unit = {},
-    onClickPickersScreen: () -> Unit = {}
+    onClickPickersScreen: () -> Unit = {},
+    onClickDocumentListScreen: () -> Unit = {},
 ) {
     val blePermissionState = rememberBluetoothPermissionState()
     val coroutineScope = rememberCoroutineScope()
@@ -121,7 +122,13 @@ fun StartScreen(
 
                 item {
                     TextButton(onClick = onClickDocumentStore) {
-                        Text("Document store")
+                        Text("DocumentStore")
+                    }
+                }
+
+                item {
+                    TextButton(onClick = onClickDocumentListScreen) {
+                        Text("DocumentList")
                     }
                 }
 

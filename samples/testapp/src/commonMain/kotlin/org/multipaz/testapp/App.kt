@@ -62,7 +62,6 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import multipazproject.samples.testapp.generated.resources.Res
 import org.jetbrains.compose.resources.ExperimentalResourceApi
-import org.jetbrains.compose.ui.tooling.preview.Preview
 import org.multipaz.asn1.ASN1Integer
 import org.multipaz.asn1.OID
 import org.multipaz.cbor.Cbor
@@ -124,6 +123,7 @@ import org.multipaz.testapp.ui.ConsentPromptScreen
 import org.multipaz.testapp.ui.CredentialClaimsViewerScreen
 import org.multipaz.testapp.ui.CredentialViewerScreen
 import org.multipaz.testapp.ui.DcRequestScreen
+import org.multipaz.testapp.ui.DocumentListScreen
 import org.multipaz.testapp.ui.DocumentStoreScreen
 import org.multipaz.testapp.ui.DocumentViewerScreen
 import org.multipaz.testapp.ui.IsoMdocMultiDeviceTestingScreen
@@ -848,7 +848,6 @@ class App private constructor (val promptModel: PromptModel) {
     private lateinit var snackbarHostState: SnackbarHostState
 
     @Composable
-    @Preview
     fun Content(navController: NavHostController = rememberNavController()) {
         var isInitialized = remember { mutableStateOf<Boolean>(false) }
         if (!isInitialized.value) {
@@ -965,7 +964,8 @@ class App private constructor (val promptModel: PromptModel) {
                             onClickRichText = { navController.navigate(RichTextDestination) },
                             onClickNotifications = { navController.navigate(NotificationsDestination) },
                             onClickScreenLock = { navController.navigate(ScreenLockDestination) },
-                            onClickPickersScreen = { navController.navigate(PickersDestination) }
+                            onClickPickersScreen = { navController.navigate(PickersDestination) },
+                            onClickDocumentListScreen = { navController.navigate(DocumentListDestination) }
                         )
                     }
                 }
@@ -1354,6 +1354,25 @@ class App private constructor (val promptModel: PromptModel) {
                     WithAppBar(navController, "Picker use-cases") {
                         PickersScreen()
                     }
+                }
+                composable<DocumentListDestination>(
+                    enterTransition = { null },
+                    exitTransition = { null },
+                    popEnterTransition = { null },
+                    popExitTransition = { null }
+                ) { backStackEntry ->
+                    // Note: DocumentListScreen has its own AppBar
+                    DocumentListScreen(
+                        documentStore = documentStore,
+                        documentModel = documentModel,
+                        settingsModel = settingsModel,
+                        onViewDocument = { documentId ->
+                            navController.navigate(DocumentViewerDestination(documentId))
+                        },
+                        onBackPressed = {
+                            navController.navigateUp()
+                        }
+                    )
                 }
             }
         }
