@@ -213,24 +213,37 @@ class DocumentModel private constructor(
     private val cardArtCache = LruCache<ByteString, ImageBitmap>(5)
 
     private suspend fun Document.toDocumentInfo(): DocumentInfo {
-        cardArt?.let {
-            val image = it.toByteArray()
+        val credentialInfos = buildCredentialInfos(documentTypeRepository)
+        cardArt?.let { encodedCardArt ->
+            val image = encodedCardArt.toByteArray()
             val imageSha256 = ByteString(Crypto.digest(Algorithm.SHA256, image))
-            var cardArt = cardArtCache.get(imageSha256)
-            if (cardArt == null) {
-                cardArt = decodeImage(image)
-                cardArtCache.put(imageSha256, cardArt)
+            var resolvedCardArt = cardArtCache.get(imageSha256)
+            if (resolvedCardArt == null) {
+                resolvedCardArt = runCatching { decodeImage(image) }
+                    .onFailure { error ->
+                        Logger.w(
+                            TAG,
+                            "Failed decoding cardArt for document=$identifier, falling back to default",
+                            error
+                        )
+                    }
+                    .getOrNull()
+                if (resolvedCardArt != null) {
+                    cardArtCache.put(imageSha256, resolvedCardArt)
+                }
             }
-            return DocumentInfo(
-                document = this,
-                cardArt = cardArt,
-                credentialInfos = buildCredentialInfos(documentTypeRepository)
-            )
+            if (resolvedCardArt != null) {
+                return DocumentInfo(
+                    document = this,
+                    cardArt = resolvedCardArt,
+                    credentialInfos = credentialInfos
+                )
+            }
         }
         return DocumentInfo(
             document = this,
             cardArt = Branding.Current.value.renderFallbackCardArt(this),
-            credentialInfos = buildCredentialInfos(documentTypeRepository)
+            credentialInfos = credentialInfos
         )
     }
 
@@ -286,4 +299,3 @@ class DocumentModel private constructor(
         }
     }
 }
-

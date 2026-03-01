@@ -17,7 +17,8 @@ data class IssuerSignedItem(
     val digestId: Long,
     val random: ByteString,
     val dataElementIdentifier: String,
-    val dataElementValue: DataItem
+    val dataElementValue: DataItem,
+    private val originalDataItem: DataItem? = null
 ) {
 
     /**
@@ -37,6 +38,9 @@ data class IssuerSignedItem(
      * @return a [DataItem] for `IssuerSignedItem` CBOR.
      */
     fun toDataItem(): DataItem {
+        if (originalDataItem != null) {
+            return originalDataItem
+        }
         return buildCborMap {
             put("digestID", digestId)
             put("random", random.toByteArray())
@@ -57,7 +61,8 @@ data class IssuerSignedItem(
                 digestId = issuerSignedItem["digestID"].asNumber,
                 random = ByteString(issuerSignedItem["random"].asBstr),
                 dataElementIdentifier = issuerSignedItem["elementIdentifier"].asTstr,
-                dataElementValue = issuerSignedItem["elementValue"]
+                dataElementValue = issuerSignedItem["elementValue"],
+                originalDataItem = issuerSignedItem
             )
         }
     }
