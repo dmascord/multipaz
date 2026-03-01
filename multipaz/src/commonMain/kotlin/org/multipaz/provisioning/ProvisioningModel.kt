@@ -197,9 +197,11 @@ class ProvisioningModel(
         }
 
         mutableState.emit(Authorized)
+        Logger.i(TAG, "State: Authorized, getting authorization data and creating document")
 
         val documentAuthorizationData = provisioningClient.getAuthorizationData()
         val document = targetDocument ?: run {
+            Logger.i(TAG, "Creating new document")
             documentProvisioningHandler.createDocument(
                 credentialConfig,
                 issuerMetadata,
@@ -253,7 +255,9 @@ class ProvisioningModel(
             }
 
             mutableState.emit(RequestingCredentials)
+            Logger.i(TAG, "RequestingCredentials state - calling obtainCredentials")
             val credentials = provisioningClient.obtainCredentials(keyInfo)
+            Logger.i(TAG, "obtainCredentials completed, got ${credentials.certifications.size} credentials")
             // If we successfully sent keys to the server, we should not unconditionally clean
             // them up on error if we are past this point.
             pendingCredentials = listOf()

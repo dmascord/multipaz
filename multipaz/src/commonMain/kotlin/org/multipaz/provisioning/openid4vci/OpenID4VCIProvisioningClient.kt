@@ -154,6 +154,9 @@ internal class OpenID4VCIProvisioningClient(
         refreshAccessIfNeeded()
         val httpClient = BackendEnvironment.getInterface(HttpClient::class)!!
 
+        Logger.i(TAG, "obtainCredentials: tokenType=$accessTokenType, credentialOffer=${credentialOffer.configurationId}")
+        Logger.i(TAG, "obtainCredentials: credentialEndpoint=${issuerConfiguration.credentialEndpoint}")
+
         var credentialResponse: HttpResponse? = null
         val tokenType = accessTokenType?.lowercase()
         val authModes = when (tokenType) {
@@ -220,6 +223,7 @@ internal class OpenID4VCIProvisioningClient(
                 }
                 break
             }
+            Logger.i(TAG, "Credential request status: ${credentialResponse?.status}, mode: $mode")
             if (credentialResponse.status == HttpStatusCode.OK) {
                 break
             }
@@ -489,12 +493,16 @@ internal class OpenID4VCIProvisioningClient(
         if (refreshToken == null && authorizationCode == null && preauthorizedCode == null) {
             throw IllegalArgumentException("No authorizations provided")
         }
+        Logger.i(TAG, "obtainToken: preauthorizedCode present=${preauthorizedCode != null}, authorizationCode present=${authorizationCode != null}")
+        
         if (preauthorizedCode != null) {
             maybeObtainClientAttestationChallenge()
         }
         val httpClient = BackendEnvironment.getInterface(HttpClient::class)!!
         var retried = false
         val dpopKey = getDPopKey()
+        
+        Logger.i(TAG, "obtainToken: tokenEndpoint=${authorizationConfiguration.tokenEndpoint}, clientAuth=${authorizationConfiguration.clientAuthentication}")
 
         // When dpop nonce is null, this loop will run twice, first request will return with error,
         // but will provide fresh, dpop nonce and the second request will get fresh access data.
@@ -610,6 +618,7 @@ internal class OpenID4VCIProvisioningClient(
             val tokenResponse = Json.parseToJsonElement(tokenResponseString) as JsonObject
             token = tokenResponse.string("access_token")
             accessTokenType = tokenResponse.stringOrNull("token_type")
+            Logger.i(TAG, "Token obtained: token_type=$accessTokenType")
             val duration = tokenResponse.integer("expires_in")
             tokenExpiration = Clock.System.now() + duration.seconds
             val refreshToken = tokenResponse.stringOrNull("refresh_token")
