@@ -43,6 +43,7 @@ import org.multipaz.crypto.EcPublicKey
 import org.multipaz.documenttype.DocumentCannedRequest
 import org.multipaz.mdoc.connectionmethod.MdocConnectionMethod
 import org.multipaz.mdoc.connectionmethod.MdocConnectionMethodBle
+import org.multipaz.mdoc.MdocCompatibilityOptions
 import org.multipaz.mdoc.connectionmethod.MdocConnectionMethodNfc
 import org.multipaz.mdoc.nfc.scanMdocReader
 import org.multipaz.mdoc.sessionencryption.SessionEncryption
@@ -897,6 +898,7 @@ private fun ShowReaderResults(
     eReaderKey: EcPrivateKey?,
 ) {
     val deviceResponse1 = readerMostRecentDeviceResponse.value
+    val allowLegacyMso = app.settingsModel.allowLegacyMsoValidityTimestamps.collectAsState().value
     if (deviceResponse1 == null || deviceResponse1.isEmpty() || eReaderKey == null) {
         Text(
             text = "Waiting for data",
@@ -920,6 +922,9 @@ private fun ShowReaderResults(
                 issuerTrustManager = app.issuerTrustManager,
                 documentTypeRepository = app.documentTypeRepository,
                 zkSystemRepository = app.zkSystemRepository,
+                compatibilityOptions = MdocCompatibilityOptions(
+                    allowLegacyMsoValidityTimestamps = allowLegacyMso
+                ),
                 onViewCertChain = null
             )
         }

@@ -19,7 +19,11 @@ import io.ktor.util.toLowerCasePreservingASCIIRules
 import org.multipaz.cbor.Cbor
 import org.multipaz.cbor.CborArray
 import org.multipaz.cbor.DataItem
+import org.multipaz.cbor.Tagged
+import org.multipaz.cbor.Tstr
 import org.multipaz.crypto.EcPublicKey
+import org.multipaz.mdoc.MdocCompatibilityOptions
+import org.multipaz.util.Logger
 import kotlin.time.Instant
 import org.multipaz.crypto.Algorithm
 
@@ -32,7 +36,8 @@ import org.multipaz.crypto.Algorithm
  */
 @Deprecated(message = "Deprecated, use MobileSecurityObject instead")
 class MobileSecurityObjectParser(
-    private var encodedMobileSecurityObject: ByteArray
+    private var encodedMobileSecurityObject: ByteArray,
+    private val compatibilityOptions: MdocCompatibilityOptions = MdocCompatibilityOptions()
 ) {
     /**
      * Parses the mobile security object.
@@ -52,7 +57,7 @@ class MobileSecurityObjectParser(
      * [CBOR](http://cbor.io/)
      * as specified in *ISO/IEC 18013-5* section 9.1.2 *Issuer data authentication*
      */
-    class MobileSecurityObject internal constructor() {
+        inner class MobileSecurityObject internal constructor() {
         private lateinit var valueDigests: MutableMap<String, Map<Long, ByteArray>>
         private var _authorizedNameSpaces: MutableList<String>? = null
         private var _authorizedDataElements: MutableMap<String, List<String>>? = null
@@ -195,19 +200,19 @@ class MobileSecurityObjectParser(
 
         private fun parseValidityInfo(validityInfo: DataItem) {
             signed = Instant.fromEpochMilliseconds(
-                validityInfo["signed"].asDateTimeString
+                parseDateTimeStringLenient(validityInfo["signed"])
                     .toEpochMilliseconds()
             )
             validFrom =
                 Instant.fromEpochMilliseconds(
-                    validityInfo["validFrom"].asDateTimeString.toEpochMilliseconds())
+                    parseDateTimeStringLenient(validityInfo["validFrom"]).toEpochMilliseconds())
             validUntil =
                 Instant.fromEpochMilliseconds(
-                    validityInfo["validUntil"].asDateTimeString.toEpochMilliseconds())
+                    parseDateTimeStringLenient(validityInfo["validUntil"]).toEpochMilliseconds())
             if (validityInfo.getOrNull("expectedUpdate") != null) {
                 expectedUpdate =
                     Instant.fromEpochMilliseconds(
-                        validityInfo["expectedUpdate"].asDateTimeString.toEpochMilliseconds())
+                        parseDateTimeStringLenient(validityInfo["expectedUpdate"]).toEpochMilliseconds())
             } else {
                 expectedUpdate = null
             }
@@ -217,6 +222,35 @@ class MobileSecurityObjectParser(
             require(validUntil > validFrom) {
                 "The validUntil timestamp should be later than the validFrom timestamp"
             }
+        }
+
+        private fun parseDateTimeStringLenient(item: DataItem): Instant {
+            if (item is Tagged) {
+                require(item.tagNumber == Tagged.DATE_TIME_STRING) {
+                    "ValidityInfo timestamp must use tdate (tag 0)"
+                }
+                val taggedItem = item.taggedItem
+                require(taggedItem is Tstr) {
+                    "ValidityInfo timestamp must be tag 0 string"
+                }
+                return Instant.parse(taggedItem.value)
+            }
+            val compatibility = this@MobileSecurityObjectParser.compatibilityOptions
+            if (item is Tstr && compatibility.allowLegacyMsoValidityTimestamps) {
+                Logger.w(
+                    TAG,
+                    "Allowing legacy untagged ValidityInfo timestamp; remove after 2026-07-01"
+                )
+                return Instant.parse(item.value)
+            }
+            if (compatibility.allowLegacyMsoValidityTimestamps) {
+                Logger.w(
+                    TAG,
+                    "Allowing legacy ValidityInfo timestamp encoded as ${item::class.simpleName}"
+                )
+                return item.asDateTimeString
+            }
+            throw IllegalArgumentException("ValidityInfo timestamp must use tag 0 tdate")
         }
 
         fun parse(encodedMobileSecurityObject: ByteArray) {
@@ -238,4 +272,7 @@ class MobileSecurityObjectParser(
             parseValidityInfo(mso["validityInfo"])
         }
     }
-}
+    companion object {
+        private const val TAG = "MobileSecurityObjectParser"
+    }
+    }

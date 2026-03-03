@@ -68,6 +68,22 @@ fun SettingsScreen(
                 enabled = (TestAppConfiguration.platform == TestAppPlatform.ANDROID)
             )
         }
+        item {
+            SettingToggle(
+                title = "Allow legacy MSO timestamps (temporary HKG workaround)",
+                subtitle = "Permits parsing untagged ValidityInfo timestamps",
+                isChecked = app.settingsModel.allowLegacyMsoValidityTimestamps.collectAsState().value,
+                onCheckedChange = { app.settingsModel.allowLegacyMsoValidityTimestamps.value = it }
+            )
+        }
+        item {
+            SettingToggle(
+                title = "Allow bearer tokens for OpenID4VCI",
+                subtitle = "Falls back to Bearer when issuers don't support DPoP",
+                isChecked = app.settingsModel.provisioningAllowBearerAccessTokens.collectAsState().value,
+                onCheckedChange = { app.settingsModel.provisioningAllowBearerAccessTokens.value = it }
+            )
+        }
         item { SettingHeadline("ISO mdoc NFC Engagement Settings") }
         item {
             if (!nfcAvailable) {

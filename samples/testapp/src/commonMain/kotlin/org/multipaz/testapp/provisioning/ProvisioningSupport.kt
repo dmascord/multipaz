@@ -33,6 +33,7 @@ import org.multipaz.util.Logger
 class ProvisioningSupport(
     val storage: Storage,
     val secureArea: SecureArea,
+    private val allowBearerAccessTokensProvider: () -> Boolean = { false },
 ) {
     companion object {
         const val APP_LINK_SERVER = "https://${BuildConfig.APPLINK_HOST}"
@@ -112,7 +113,8 @@ class ProvisioningSupport(
             },
             redirectUrl = APP_LINK_BASE_URL,
             locales = listOf("en-US"),
-            signingAlgorithms = listOf(Algorithm.ESP256, Algorithm.ESP384, Algorithm.ESP512)
+            signingAlgorithms = listOf(Algorithm.ESP256, Algorithm.ESP384, Algorithm.ESP512),
+            allowBearerAccessTokens = allowBearerAccessTokensProvider()
         )
     }
 

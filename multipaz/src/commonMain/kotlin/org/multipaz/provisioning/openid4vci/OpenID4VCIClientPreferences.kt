@@ -14,5 +14,7 @@ data class OpenID4VCIClientPreferences(
     /** List of locales in the order of preference that this client supports */
     val locales: List<String>,
     /** Digital signing algorithms that this client supports */
-    val signingAlgorithms: List<Algorithm>
+    val signingAlgorithms: List<Algorithm>,
+    /** Allow bearer access tokens instead of DPoP (off by default). */
+    val allowBearerAccessTokens: Boolean = false,
 )

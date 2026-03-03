@@ -407,6 +407,7 @@ class App private constructor (val promptModel: PromptModel) {
         provisioningSupport = ProvisioningSupport(
             storage = TestAppConfiguration.storage,
             secureArea = Platform.getSecureArea(TestAppConfiguration.storage),
+            allowBearerAccessTokensProvider = { settingsModel.provisioningAllowBearerAccessTokens.value }
         )
         provisioningSupport.init()
     }
@@ -1449,6 +1450,8 @@ class App private constructor (val promptModel: PromptModel) {
                         }
                         val metadata =
                             ShowResponseMetadata.fromDataItem(Cbor.decode(destination.metadata.fromBase64Url()))
+                        val allowLegacyMso = settingsModel.allowLegacyMsoValidityTimestamps.collectAsState().value
+                        val compatibilityOptions = MdocCompatibilityOptions(allowLegacyMsoValidityTimestamps = allowLegacyMso)
                         ShowResponseScreen(
                             vpToken = vpToken,
                             deviceResponse = deviceResponse,
@@ -1459,6 +1462,7 @@ class App private constructor (val promptModel: PromptModel) {
                             issuerTrustManager = issuerTrustManager,
                             documentTypeRepository = documentTypeRepository,
                             zkSystemRepository = zkSystemRepository,
+                            compatibilityOptions = compatibilityOptions,
                             onViewCertChain = { certChain ->
                                 val encodedCertificateData =
                                     Cbor.encode(certChain.toDataItem()).toBase64Url()

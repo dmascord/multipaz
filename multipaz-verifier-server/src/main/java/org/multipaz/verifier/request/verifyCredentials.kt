@@ -44,6 +44,8 @@ import org.multipaz.crypto.Crypto
 import org.multipaz.crypto.Hpke
 import org.multipaz.crypto.JsonWebEncryption
 import org.multipaz.mdoc.response.DeviceResponse
+import org.multipaz.mdoc.MdocCompatibilityOptions
+
 import org.multipaz.openid.OpenID4VP
 import org.multipaz.openid.TransactionData
 import org.multipaz.rpc.backend.BackendEnvironment
@@ -460,7 +462,11 @@ private suspend fun processMdocResponse(
     documentRequests: List<RequestedDocument>
 ): List<JsonObject> {
     val trustManager = getTrustManager()
-    val deviceResponse = DeviceResponse.fromDataItem(credentialResponse)
+    val compatibilityOptions = MdocCompatibilityOptions(
+        allowLegacyMsoValidityTimestamps = true
+    )
+
+    val deviceResponse = DeviceResponse.fromDataItem(credentialResponse, compatibilityOptions)
     try {
         deviceResponse.verify(sessionTranscript = mdocSessionTranscript)
     } catch (err: Exception) {

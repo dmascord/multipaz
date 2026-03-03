@@ -30,6 +30,9 @@ import org.multipaz.crypto.X509CertChain
 import org.multipaz.document.Document
 import org.multipaz.documenttype.DocumentTypeRepository
 import org.multipaz.mdoc.issuersigned.IssuerNamespaces
+import org.multipaz.mdoc.MdocCompatibilityOptions
+
+import org.multipaz.mdoc.mso.MsoPayloadDecoder
 import org.multipaz.mdoc.mso.MobileSecurityObject
 import org.multipaz.sdjwt.credential.KeyBoundSdJwtVcCredential
 import org.multipaz.securearea.CreateKeySettings
@@ -264,6 +267,9 @@ class MdocCredential : SecureAreaBoundCredential {
     /**
      * The `IssuerSigned` data according to ISO/IEC 18013-5:2021.
      */
+    /**
+     * The `IssuerSigned` data according to ISO/IEC 18013-5:2021.
+     */
     val issuerSigned: DataItem by lazy {
         Cbor.decode(issuerProvidedData.toByteArray())
     }
@@ -288,9 +294,33 @@ class MdocCredential : SecureAreaBoundCredential {
      * Convenience property for accessing the [MobileSecurityObject] from [issuerAuth].
      */
     val mso: MobileSecurityObject by lazy {
-        val encodedMobileSecurityObject = Cbor.decode(issuerAuth.payload!!).asTagged.asBstr
-        MobileSecurityObject.fromDataItem(Cbor.decode(encodedMobileSecurityObject))
+        parseMobileSecurityObjectWithLegacyFallback()
     }
+
+    private fun parseMobileSecurityObjectWithLegacyFallback(): MobileSecurityObject {
+        val strictOptions = MdocCompatibilityOptions()
+        val payload = issuerAuth.payload!!
+        return runCatching {
+            decodeMobileSecurityObject(payload, strictOptions)
+        }.getOrElse { error ->
+            val legacyOptions = strictOptions.copy(allowLegacyMsoValidityTimestamps = true)
+            Logger.w(
+                TAG,
+                "MSO parse failed with strict ValidityInfo enforcement; retrying with legacy tolerance",
+                error
+            )
+            decodeMobileSecurityObject(payload, legacyOptions)
+        }
+    }
+
+    private fun decodeMobileSecurityObject(
+        payload: ByteArray,
+        compatibilityOptions: MdocCompatibilityOptions
+    ): MobileSecurityObject {
+        val decodedMso = MsoPayloadDecoder.decode(payload, compatibilityOptions)
+        return MobileSecurityObject.fromDataItem(decodedMso, compatibilityOptions)
+    }
+
 
     /**
      * Convenience property for accessing the X.509 certificate chain for the issuer signature from [issuerAuth].

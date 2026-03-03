@@ -506,12 +506,20 @@ sealed class DataItem(
     /**
      * The value of a data item containing a COSE_Sign1.
      *
-     * This is equivalent to calling [CoseSign1.fromDataItem].
+     * This is equivalent to calling [CoseSign1.fromDataItem] and accepts the optional
+     * COSE_Sign1 tag (#6.18) automatically.
      *
-     * @throws IllegalArgumentException if not the data item isn't a COSE_Sign1.
+     * @throws IllegalArgumentException if the data item isn't a COSE_Sign1.
      */
     val asCoseSign1: CoseSign1
-        get() = CoseSign1.fromDataItem(this)
+        get() = CoseSign1.fromDataItem(this, acceptTagged = true)
+
+
+    /**
+     * The value of a data item containing a COSE_Sign1, accepting tagged (#6.18) encoding.
+     */
+    val asCoseSign1AllowTagged: CoseSign1
+        get() = CoseSign1.fromDataItem(this, acceptTagged = true)
 
     /**
      * The value of a data item containing a COSE_Mac0.

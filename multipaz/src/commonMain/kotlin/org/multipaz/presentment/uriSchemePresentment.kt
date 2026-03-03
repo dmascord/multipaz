@@ -124,22 +124,35 @@ suspend fun uriSchemePresentment(
         }
         else -> throw IllegalArgumentException("Unexpected response_mode")
     }
+    val state = response["state"]?.jsonPrimitive?.content?.takeIf { it.isNotBlank() }
+        ?: requestObject["state"]?.jsonPrimitive?.content?.takeIf { it.isNotBlank() }
 
     val postResponseResponse = httpClient.post(responseUri) {
         contentType(ContentType.Application.FormUrlEncoded)
         setBody(
             Parameters.build {
                 append("response", responseCs)
-                // TODO: remember state
+                // OpenID4VP direct_post responses should echo request state to the response endpoint.
+                state?.let { append("state", it) }
             }.formUrlEncode().encodeToByteArray()
         )
     }
-    check(postResponseResponse.status == HttpStatusCode.OK)
-    check(postResponseResponse.contentType()!! == ContentType.Application.Json)
-    val bodyText = (postResponseResponse.body() as ByteArray).decodeToString()
-    val postResponseBody = Json.decodeFromString<JsonObject>(bodyText)
-    val redirectUri = postResponseBody["redirect_uri"]!!.jsonPrimitive.content
+    val responseStatus = postResponseResponse.status
+    val responseContentType = postResponseResponse.contentType()
+    val responseBodyBytes = postResponseResponse.body<ByteArray>()
+    if (responseStatus.value !in 200..299) {
+        val snippet = responseBodyBytes.decodeToString().take(256)
+        throw IllegalStateException("direct_post to verifier failed (${responseStatus.value}): ${snippet}")
+    }
+    if (responseContentType?.withoutParameters() != ContentType.Application.Json) {
+        return null
+    }
+    val postResponseBody = runCatching {
+        Json.decodeFromString<JsonObject>(responseBodyBytes.decodeToString())
+    }.getOrNull() ?: return null
+    val redirectUri = postResponseBody["redirect_uri"]?.jsonPrimitive?.content
     return redirectUri
+
 }
 
 private suspend fun mdocUriSchemePresentment(

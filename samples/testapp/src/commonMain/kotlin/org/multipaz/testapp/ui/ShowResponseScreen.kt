@@ -15,6 +15,7 @@ import org.multipaz.crypto.EcPrivateKey
 import org.multipaz.crypto.X509CertChain
 import org.multipaz.documenttype.DocumentTypeRepository
 import org.multipaz.mdoc.zkp.ZkSystemRepository
+import org.multipaz.mdoc.MdocCompatibilityOptions
 import org.multipaz.testapp.ShowResponseMetadata
 import org.multipaz.trustmanagement.TrustManagerInterface
 
@@ -31,7 +32,9 @@ fun ShowResponseScreen(
     issuerTrustManager: TrustManagerInterface,
     documentTypeRepository: DocumentTypeRepository?,
     zkSystemRepository: ZkSystemRepository?,
+    compatibilityOptions: MdocCompatibilityOptions = MdocCompatibilityOptions(),
     onViewCertChain: (certChain: X509CertChain) -> Unit
+) {
 ) {
     val scrollState = rememberScrollState()
     Column(
@@ -49,6 +52,7 @@ fun ShowResponseScreen(
             issuerTrustManager = issuerTrustManager,
             documentTypeRepository = documentTypeRepository,
             zkSystemRepository = zkSystemRepository,
+            compatibilityOptions = compatibilityOptions,
             onViewCertChain = onViewCertChain
         )
     }

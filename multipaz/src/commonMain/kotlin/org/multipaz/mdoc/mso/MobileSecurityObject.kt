@@ -3,6 +3,8 @@ package org.multipaz.mdoc.mso
 import kotlinx.io.bytestring.ByteString
 import org.multipaz.cbor.Bstr
 import org.multipaz.cbor.DataItem
+import org.multipaz.cbor.Tagged
+import org.multipaz.cbor.Tstr
 import org.multipaz.cbor.buildCborMap
 import org.multipaz.cbor.putCborArray
 import org.multipaz.cbor.putCborMap
@@ -10,6 +12,7 @@ import org.multipaz.cbor.toDataItem
 import org.multipaz.cbor.toDataItemDateTimeString
 import org.multipaz.crypto.Algorithm
 import org.multipaz.crypto.EcPublicKey
+import org.multipaz.mdoc.MdocCompatibilityOptions
 import org.multipaz.mdoc.response.DeviceResponse
 import org.multipaz.revocation.RevocationStatus
 import org.multipaz.util.Logger
@@ -135,7 +138,10 @@ data class MobileSecurityObject(
          * @param dataItem a [DataItem] containing CBOR for `MobileSecurityObject`.
          * @return a [MobileSecurityObject].
          */
-        fun fromDataItem(dataItem: DataItem): MobileSecurityObject {
+        fun fromDataItem(
+            dataItem: DataItem,
+            compatibilityOptions: MdocCompatibilityOptions = MdocCompatibilityOptions()
+        ): MobileSecurityObject {
             val valueDigests = mutableMapOf<String, MutableMap<Long, ByteString>>()
 
             dataItem["valueDigests"].asMap.forEach { (namespace, digestIds) ->
@@ -185,10 +191,12 @@ data class MobileSecurityObject(
             return MobileSecurityObject(
                 version = dataItem["version"].asTstr,
                 docType = dataItem["docType"].asTstr,
-                signedAt = validityInfo["signed"].asDateTimeString,
-                validFrom = validityInfo["validFrom"].asDateTimeString,
-                validUntil = validityInfo["validUntil"].asDateTimeString,
-                expectedUpdate = validityInfo.getOrNull("expectedUpdate")?.asDateTimeString,
+                signedAt = parseValidityTimestamp("signed", validityInfo["signed"], compatibilityOptions),
+                validFrom = parseValidityTimestamp("validFrom", validityInfo["validFrom"], compatibilityOptions),
+                validUntil = parseValidityTimestamp("validUntil", validityInfo["validUntil"], compatibilityOptions),
+                expectedUpdate = validityInfo.getOrNull("expectedUpdate")?.let {
+                    parseValidityTimestamp("expectedUpdate", it, compatibilityOptions)
+                },
                 digestAlgorithm = dataItem["digestAlgorithm"].asTstr.let {
                     when (it) {
                         "SHA-256" -> Algorithm.SHA256
@@ -204,6 +212,38 @@ data class MobileSecurityObject(
                 deviceKeyInfo = deviceKeyInfo,
                 revocationStatus = revocationStatus
             )
+        }
+
+        private fun parseValidityTimestamp(
+            fieldName: String,
+            item: DataItem,
+            compatibilityOptions: MdocCompatibilityOptions
+        ): Instant {
+            if (item is Tagged) {
+                require(item.tagNumber == Tagged.DATE_TIME_STRING) {
+                    "ValidityInfo.$fieldName must use tdate (tag 0)"
+                }
+                val taggedItem = item.taggedItem
+                require(taggedItem is Tstr) {
+                    "ValidityInfo.$fieldName must be tag 0 string"
+                }
+                return Instant.parse(taggedItem.value)
+            }
+            if (item is Tstr && compatibilityOptions.allowLegacyMsoValidityTimestamps) {
+                Logger.w(
+                    TAG,
+                    "Allowing legacy untagged ValidityInfo.$fieldName timestamp; remove after 2026-07-01"
+                )
+                return Instant.parse(item.value)
+            }
+            if (compatibilityOptions.allowLegacyMsoValidityTimestamps) {
+                Logger.w(
+                    TAG,
+                    "Allowing legacy ValidityInfo.$fieldName timestamp encoded as ${item::class.simpleName}"
+                )
+                return item.asDateTimeString
+            }
+            throw IllegalArgumentException("ValidityInfo.$fieldName must use tag 0 tdate")
         }
 
     }

@@ -32,6 +32,7 @@ import org.multipaz.crypto.Hpke
 import org.multipaz.crypto.JsonWebEncryption
 import org.multipaz.crypto.AsymmetricKey
 import org.multipaz.documenttype.DocumentTypeRepository
+import org.multipaz.mdoc.MdocCompatibilityOptions
 import org.multipaz.mdoc.request.DeviceRequest
 import org.multipaz.mdoc.request.DeviceRequestInfo
 import org.multipaz.mdoc.request.DocRequestInfo
@@ -831,8 +832,9 @@ object VerificationUtil {
         eReaderKey: AsymmetricKey?,
         documentTypeRepository: DocumentTypeRepository?,
         zkSystemRepository: ZkSystemRepository?,
+        compatibilityOptions: MdocCompatibilityOptions = MdocCompatibilityOptions(),
     ): List<VerifiedPresentation> {
-        val dr = DeviceResponse.fromDataItem(deviceResponse)
+        val dr = DeviceResponse.fromDataItem(deviceResponse, compatibilityOptions)
         dr.verify(
             sessionTranscript = sessionTranscript,
             eReaderKey = eReaderKey,

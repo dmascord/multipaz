@@ -29,6 +29,8 @@ import org.multipaz.crypto.X509CertChain
 import org.multipaz.crypto.Crypto
 import org.multipaz.crypto.EcPrivateKey
 import org.multipaz.crypto.EcPublicKey
+import org.multipaz.mdoc.MdocCompatibilityOptions
+import org.multipaz.mdoc.mso.MsoPayloadDecoder
 import org.multipaz.mdoc.mso.MobileSecurityObjectParser
 import org.multipaz.util.Constants
 import org.multipaz.util.Logger
@@ -51,7 +53,8 @@ import org.multipaz.mdoc.zkp.ZkDocument
 @Deprecated(message = "Deprecated, use DeviceResponse instead")
 class DeviceResponseParser(
     val encodedDeviceResponse: ByteArray,
-    val encodedSessionTranscript: ByteArray
+    val encodedSessionTranscript: ByteArray,
+    private val compatibilityOptions: MdocCompatibilityOptions = MdocCompatibilityOptions()
 ) {
     private var eReaderKey: AsymmetricKey? = null
 
@@ -102,7 +105,7 @@ class DeviceResponseParser(
      * [CBOR](http://cbor.io/)
      * as specified in *ISO/IEC 18013-5* section 8.3 *Device Retrieval*.
      */
-    class DeviceResponse {
+    inner class DeviceResponse {
 
         // backing fields
         private val _documents = mutableListOf<Document>()
@@ -162,8 +165,13 @@ class DeviceResponseParser(
             } else {
                 false
             }
-            val encodedMobileSecurityObject = Cbor.decode(issuerAuth.payload!!).asTagged.asBstr
-            val parsedMso = MobileSecurityObjectParser(encodedMobileSecurityObject).parse()
+            val encodedMobileSecurityObject = Cbor.encode(
+                MsoPayloadDecoder.decode(issuerAuth.payload!!, compatibilityOptions)
+            )
+            val parsedMso = MobileSecurityObjectParser(
+                encodedMobileSecurityObject,
+                compatibilityOptions
+            ).parse()
 
             builder.apply {
                 setIssuerSignedAuthenticated(issuerSignedAuthenticated)
@@ -222,7 +230,7 @@ class DeviceResponseParser(
                             )
                         val digestMatch = expectedDigest contentEquals digest
                         if (!digestMatch) {
-                            Logger.w(TAG, "hash mismatch for data element $nameSpace $elementName")
+                            Logger.w(DEVICE_RESPONSE_TAG, "hash mismatch for data element $nameSpace $elementName")
                         }
                         builder.addIssuerEntry(
                             nameSpace, elementName,
@@ -306,10 +314,10 @@ class DeviceResponseParser(
                 ).tag
                 deviceSignedAuthenticated = expectedTag contentEquals tagInResponse
                 if (deviceSignedAuthenticated) {
-                    Logger.d(TAG, "Verified DeviceSigned using MAC")
+                    Logger.d(DEVICE_RESPONSE_TAG, "Verified DeviceSigned using MAC")
                 } else {
                     Logger.d(
-                        TAG, "Device MAC mismatch, got ${tagInResponse.toHex()}"
+                        DEVICE_RESPONSE_TAG, "Device MAC mismatch, got ${tagInResponse.toHex()}"
                                 + " expected ${expectedTag.toHex()}"
                     )
                 }
@@ -387,9 +395,7 @@ class DeviceResponseParser(
         var status = Constants.DEVICE_RESPONSE_STATUS_OK
             private set
 
-        companion object {
-            private const val TAG = "DeviceResponse"
-        }
+
     }
 
     /**
@@ -796,4 +802,8 @@ class DeviceResponseParser(
             private const val TAG = "Document"
         }
     }
+    companion object {
+        private const val DEVICE_RESPONSE_TAG = "DeviceResponse"
+    }
+
 }

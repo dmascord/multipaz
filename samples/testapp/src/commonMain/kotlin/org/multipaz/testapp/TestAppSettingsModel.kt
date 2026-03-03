@@ -166,6 +166,8 @@ class TestAppSettingsModel private constructor(
         bind(dcApiProtocols, "dcApiProtocols", digitalCredentials.supportedProtocols)
 
         bind(cryptoPreferBouncyCastle, "cryptoForceBouncyCastle", false)
+        bind(allowLegacyMsoValidityTimestamps, "allowLegacyMsoValidityTimestamps", false)
+        bind(provisioningAllowBearerAccessTokens, "provisioningAllowBearerAccessTokens", false)
 
         bind(observeModeEnabled, "observeModeEnabled", false)
         bind(observeModeEmitPollingFramesAsReader, "observeModeEmitPollingFramesAsReader", false)
@@ -197,6 +199,8 @@ class TestAppSettingsModel private constructor(
     val dcApiProtocols = MutableStateFlow<Set<String>>(emptySet())
 
     val cryptoPreferBouncyCastle = MutableStateFlow<Boolean>(false)
+    val allowLegacyMsoValidityTimestamps = MutableStateFlow<Boolean>(false)
+    val provisioningAllowBearerAccessTokens = MutableStateFlow<Boolean>(false)
 
     val observeModeEnabled = MutableStateFlow<Boolean>(false)
     val observeModeEmitPollingFramesAsReader = MutableStateFlow<Boolean>(false)

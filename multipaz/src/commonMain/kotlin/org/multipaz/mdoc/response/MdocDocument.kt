@@ -17,6 +17,7 @@ import org.multipaz.crypto.Algorithm
 import org.multipaz.crypto.AsymmetricKey
 import org.multipaz.crypto.Crypto
 import org.multipaz.crypto.EcPublicKey
+import org.multipaz.mdoc.MdocCompatibilityOptions
 import org.multipaz.crypto.Hkdf
 import org.multipaz.crypto.SignatureVerificationException
 import org.multipaz.crypto.X509CertChain
@@ -27,6 +28,7 @@ import org.multipaz.mdoc.devicesigned.buildDeviceNamespaces
 import org.multipaz.mdoc.issuersigned.IssuerNamespaces
 import org.multipaz.mdoc.issuersigned.IssuerSignedItem
 import org.multipaz.mdoc.issuersigned.buildIssuerNamespaces
+import org.multipaz.mdoc.mso.MsoPayloadDecoder
 import org.multipaz.mdoc.mso.MobileSecurityObject
 import org.multipaz.presentment.PresentmentUnlockReason
 import org.multipaz.request.MdocRequestedClaim
@@ -50,7 +52,8 @@ data class MdocDocument(
     val deviceAuth: DeviceAuth,
     val deviceNamespaces: DeviceNamespaces,
     val errors: Map<String, Map<String, Int>>,
-    private val issuerNamespaceDigests: Map<String, Map<String, ByteString>>? = null
+    private val issuerNamespaceDigests: Map<String, Map<String, ByteString>>? = null,
+    private val compatibilityOptions: MdocCompatibilityOptions = MdocCompatibilityOptions()
 ) {
 
     // Don't include issuerNamespaceDigests in comparison
@@ -70,8 +73,10 @@ data class MdocDocument(
      * Convenience property for accessing the [MobileSecurityObject] from [issuerAuth].
      */
     val mso: MobileSecurityObject by lazy {
-        val encodedMobileSecurityObject = Cbor.decode(issuerAuth.payload!!).asTagged.asBstr
-        MobileSecurityObject.fromDataItem(Cbor.decode(encodedMobileSecurityObject))
+        MobileSecurityObject.fromDataItem(
+            MsoPayloadDecoder.decode(issuerAuth.payload!!, compatibilityOptions),
+            compatibilityOptions
+        )
     }
 
     /**
@@ -248,7 +253,10 @@ data class MdocDocument(
          * @param dataItem a [DataItem] containing CBOR for `Document`.
          * @return a [MdocDocument].
          */
-        suspend fun fromDataItem(dataItem: DataItem): MdocDocument {
+        suspend fun fromDataItem(
+            dataItem: DataItem,
+            compatibilityOptions: MdocCompatibilityOptions = MdocCompatibilityOptions()
+        ): MdocDocument {
             val docType = dataItem["docType"].asTstr
             val issuerSigned = dataItem["issuerSigned"]
             val issuerAuth = issuerSigned["issuerAuth"].asCoseSign1
@@ -258,8 +266,10 @@ data class MdocDocument(
             //
             val issuerNamespaceDigests = mutableMapOf<String, Map<String, ByteString>>()
             val issuerNamespaces = issuerSigned.getOrNull("nameSpaces")?.let {
-                val encodedMobileSecurityObject = Cbor.decode(issuerAuth.payload!!).asTagged.asBstr
-                val mso = MobileSecurityObject.fromDataItem(Cbor.decode(encodedMobileSecurityObject))
+                val mso = MobileSecurityObject.fromDataItem(
+                    MsoPayloadDecoder.decode(issuerAuth.payload!!, compatibilityOptions),
+                    compatibilityOptions
+                )
                 for ((namespaceDataItemKey, namespaceDataItemValue) in it.asMap) {
                     val namespaceName = namespaceDataItemKey.asTstr
                     val innerMap = mutableMapOf<String, ByteString>()
@@ -296,7 +306,8 @@ data class MdocDocument(
                 deviceAuth = deviceAuth,
                 deviceNamespaces = deviceNamespaces,
                 errors = errors ?: emptyMap(),
-                issuerNamespaceDigests = issuerNamespaceDigests
+                issuerNamespaceDigests = issuerNamespaceDigests,
+                compatibilityOptions = compatibilityOptions
             )
         }
 
@@ -379,7 +390,8 @@ data class MdocDocument(
                 deviceAuth = deviceAuth,
                 deviceNamespaces = deviceNamespaces,
                 errors = errors,
-                issuerNamespaceDigests = null
+                issuerNamespaceDigests = null,
+                compatibilityOptions = MdocCompatibilityOptions()
             )
         }
 

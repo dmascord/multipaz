@@ -8,6 +8,7 @@ import org.multipaz.cose.CoseSign1
 import org.multipaz.crypto.AsymmetricKey
 import org.multipaz.crypto.EcPublicKey
 import org.multipaz.mdoc.credential.MdocCredential
+import org.multipaz.mdoc.MdocCompatibilityOptions
 import org.multipaz.mdoc.devicesigned.DeviceNamespaces
 import org.multipaz.mdoc.devicesigned.buildDeviceNamespaces
 import org.multipaz.mdoc.issuersigned.IssuerNamespaces
@@ -190,11 +191,14 @@ data class DeviceResponse internal constructor(
          * @param dataItem a [DataItem] containing CBOR for `DeviceResponse`.
          * @return a [DeviceResponse].
          */
-        suspend fun fromDataItem(dataItem: DataItem): DeviceResponse {
+        suspend fun fromDataItem(
+            dataItem: DataItem,
+            compatibilityOptions: MdocCompatibilityOptions = MdocCompatibilityOptions()
+        ): DeviceResponse {
             val version = dataItem["version"].asTstr
             val status = dataItem["status"].asNumber.toInt()
             val documents = dataItem.getOrNull("documents")?.asArray?.map {
-                MdocDocument.fromDataItem(it)
+                MdocDocument.fromDataItem(it, compatibilityOptions)
             }
             val zkDocuments = dataItem.getOrNull("zkDocuments")?.asArray?.map {
                 ZkDocument.fromDataItem(it)

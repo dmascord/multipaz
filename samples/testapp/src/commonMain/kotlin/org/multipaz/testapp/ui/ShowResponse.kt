@@ -43,6 +43,7 @@ import org.multipaz.crypto.X509CertChain
 import org.multipaz.documenttype.DocumentAttributeType
 import org.multipaz.documenttype.DocumentTypeRepository
 import org.multipaz.mdoc.zkp.ZkSystemRepository
+import org.multipaz.mdoc.MdocCompatibilityOptions
 import org.multipaz.trustmanagement.TrustManagerInterface
 import org.multipaz.util.Logger
 import org.multipaz.util.fromBase64Url
@@ -112,7 +113,9 @@ fun ShowResponse(
     issuerTrustManager: TrustManagerInterface,
     documentTypeRepository: DocumentTypeRepository?,
     zkSystemRepository: ZkSystemRepository?,
+    compatibilityOptions: MdocCompatibilityOptions = MdocCompatibilityOptions(),
     onViewCertChain: ((certChain: X509CertChain) -> Unit)?
+) {
 ) {
     val coroutineScope = rememberCoroutineScope()
     val verificationError = remember { mutableStateOf<Throwable?>(null) }
@@ -133,6 +136,7 @@ fun ShowResponse(
                     documentTypeRepository = documentTypeRepository,
                     zkSystemRepository = zkSystemRepository,
                     issuerTrustManager = issuerTrustManager,
+                    compatibilityOptions = compatibilityOptions,
                     onViewCertChain = onViewCertChain
                 )
             } catch (e: Throwable) {
@@ -220,7 +224,9 @@ private suspend fun parseResponse(
     documentTypeRepository: DocumentTypeRepository?,
     zkSystemRepository: ZkSystemRepository?,
     issuerTrustManager: TrustManagerInterface,
+    compatibilityOptions: MdocCompatibilityOptions,
     onViewCertChain: ((certChain: X509CertChain) -> Unit)?
+): VerificationResult {
 ): VerificationResult {
     val sections = mutableListOf<Section>()
     var lines: MutableList<Line>
@@ -234,7 +240,8 @@ private suspend fun parseResponse(
                 AsymmetricKey.anonymous(it, it.curve.defaultKeyAgreementAlgorithm)
             },
             documentTypeRepository = documentTypeRepository,
-            zkSystemRepository = zkSystemRepository
+            zkSystemRepository = zkSystemRepository,
+            compatibilityOptions = compatibilityOptions
         )
     } else if (vpToken != null) {
         verifyOpenID4VPResponse(
