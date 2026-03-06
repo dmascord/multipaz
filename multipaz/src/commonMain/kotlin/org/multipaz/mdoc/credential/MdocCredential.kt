@@ -31,6 +31,7 @@ import org.multipaz.document.Document
 import org.multipaz.documenttype.DocumentTypeRepository
 import org.multipaz.mdoc.issuersigned.IssuerNamespaces
 import org.multipaz.mdoc.MdocCompatibilityOptions
+import org.multipaz.mdoc.MdocCompatibilityDefaults
 
 import org.multipaz.mdoc.mso.MsoPayloadDecoder
 import org.multipaz.mdoc.mso.MobileSecurityObject
@@ -298,18 +299,22 @@ class MdocCredential : SecureAreaBoundCredential {
     }
 
     private fun parseMobileSecurityObjectWithLegacyFallback(): MobileSecurityObject {
-        val strictOptions = MdocCompatibilityOptions()
+        val preferredOptions = MdocCompatibilityDefaults.current()
         val payload = issuerAuth.payload!!
         return runCatching {
-            decodeMobileSecurityObject(payload, strictOptions)
+            decodeMobileSecurityObject(payload, preferredOptions)
         }.getOrElse { error ->
-            val legacyOptions = strictOptions.copy(allowLegacyMsoValidityTimestamps = true)
+            val fallbackOptions = if (preferredOptions.allowLegacyMsoValidityTimestamps) {
+                preferredOptions.copy(allowLegacyMsoValidityTimestamps = false)
+            } else {
+                preferredOptions.copy(allowLegacyMsoValidityTimestamps = true)
+            }
             Logger.w(
                 TAG,
-                "MSO parse failed with strict ValidityInfo enforcement; retrying with legacy tolerance",
+                "MSO parse failed with configured ValidityInfo mode; retrying with alternate tolerance",
                 error
             )
-            decodeMobileSecurityObject(payload, legacyOptions)
+            decodeMobileSecurityObject(payload, fallbackOptions)
         }
     }
 

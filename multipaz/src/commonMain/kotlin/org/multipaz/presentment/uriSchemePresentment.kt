@@ -144,15 +144,21 @@ suspend fun uriSchemePresentment(
         val snippet = responseBodyBytes.decodeToString().take(256)
         throw IllegalStateException("direct_post to verifier failed (${responseStatus.value}): ${snippet}")
     }
+    return extractRedirectUriFromDirectPostCallback(responseContentType, responseBodyBytes)
+
+}
+
+internal fun extractRedirectUriFromDirectPostCallback(
+    responseContentType: ContentType?,
+    responseBodyBytes: ByteArray,
+): String? {
     if (responseContentType?.withoutParameters() != ContentType.Application.Json) {
         return null
     }
     val postResponseBody = runCatching {
         Json.decodeFromString<JsonObject>(responseBodyBytes.decodeToString())
     }.getOrNull() ?: return null
-    val redirectUri = postResponseBody["redirect_uri"]?.jsonPrimitive?.content
-    return redirectUri
-
+    return postResponseBody["redirect_uri"]?.jsonPrimitive?.content
 }
 
 private suspend fun mdocUriSchemePresentment(
