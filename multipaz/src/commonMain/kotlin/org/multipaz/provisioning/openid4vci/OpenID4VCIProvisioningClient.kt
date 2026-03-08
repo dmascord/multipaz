@@ -169,6 +169,11 @@ internal class OpenID4VCIProvisioningClient(
         }
         val credentialMetadata =
             issuerConfiguration.provisioningMetadata.credentials[credentialOffer.configurationId]!!
+        Logger.i(
+            TAG,
+            "Credential request start configId=${credentialOffer.configurationId} " +
+                "format=${credentialMetadata.format.formatId} authModes=${authModes.joinToString(",")}"
+        )
         val keyProofs = buildKeyProofs(keyInfo)
         val dpopKey = getDPopKey()
         for (mode in authModes) {
@@ -245,6 +250,11 @@ internal class OpenID4VCIProvisioningClient(
         val finalResponse = credentialResponse
             ?: throw IllegalStateException("Error getting a credential issued: no response")
         val responseText = finalResponse.readRawBytes().decodeToString()
+        Logger.i(
+            TAG,
+            "Credential request completed status=${finalResponse.status} " +
+                "bodyChars=${responseText.length}"
+        )
         if (finalResponse.status != HttpStatusCode.OK) {
             Logger.e(TAG,"Credential request error: ${finalResponse.status} $responseText")
             throw IllegalStateException(
@@ -253,6 +263,11 @@ internal class OpenID4VCIProvisioningClient(
         Logger.i(TAG, "Got successful response for credential request")
 
         val response = Json.parseToJsonElement(responseText) as JsonObject
+        Logger.i(
+            TAG,
+            "Credential response parsed keys=${response.keys.sorted().joinToString(",")} " +
+                "credentialsCount=${response["credentials"]?.jsonArray?.size ?: 0}"
+        )
         val serializedCredentials = response["credentials"]!!.jsonArray.map {
             if (it !is JsonObject) {
                 throw IllegalStateException("Credential must be represented as json string")

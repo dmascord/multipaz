@@ -43,6 +43,7 @@ import org.multipaz.presentment.CredentialMatchSourceOpenID4VP
 import org.multipaz.presentment.CredentialPresentmentSetOptionMemberMatch
 import org.multipaz.presentment.PresentmentCanceled
 import org.multipaz.presentment.PresentmentSource
+import org.multipaz.request.RequestedClaim
 import org.multipaz.request.JsonRequestedClaim
 import org.multipaz.request.MdocRequestedClaim
 import org.multipaz.request.Requester
@@ -428,6 +429,13 @@ object OpenID4VP {
         if (selection == null) {
             throw PresentmentCanceled("User canceled at document selection time")
         }
+        Logger.i(
+            TAG,
+            "selection matches=${selection.matches.size} entries=" +
+                selection.matches.joinToString(separator = ";") { match ->
+                    summarizeMatch(match)
+                }
+        )
 
         var usingZk = false
         selection.matches.forEach { match ->
@@ -462,13 +470,21 @@ object OpenID4VP {
                 throw IllegalArgumentException("Expected ISO mdoc or IETF SD-JWT, got neither")
             }
             vpTokens.put(match.source.credentialQuery.id, credentialResponse)
+            Logger.i(
+                TAG,
+                "vpToken entry queryId=${match.source.credentialQuery.id} " +
+                    "credential=${summarizeCredential(match.credential)} " +
+                    "responseKind=${if (credentialResponse.count { it == '.' } >= 4) "sd_jwt" else "mdoc"} " +
+                    "responseLength=${credentialResponse.length}"
+            )
         }
 
         val vpToken = when (version) {
             Version.DRAFT_29 -> {
+                val sortedVpTokens = vpTokens.entries.sortedBy { it.key }
                 buildJsonObject {
                     putJsonObject("vp_token") {
-                        for ((dcqlId, response) in vpTokens) {
+                        for ((dcqlId, response) in sortedVpTokens) {
                             putJsonArray(dcqlId) {
                                 // For now we only support returning a single Verifiable Presentation per requested credential,
                                 add(response)
@@ -479,9 +495,10 @@ object OpenID4VP {
             }
 
             Version.DRAFT_24 -> {
+                val sortedVpTokens = vpTokens.entries.sortedBy { it.key }
                 buildJsonObject {
                     putJsonObject("vp_token") {
-                        for ((dcqlId, response) in vpTokens) {
+                        for ((dcqlId, response) in sortedVpTokens) {
                             put(dcqlId, response)
                         }
                     }
@@ -711,10 +728,40 @@ object OpenID4VP {
         match.source as CredentialMatchSourceOpenID4VP
         val sdjwtVcCredential = match.credential as SdJwtVcCredential
         val claims = match.source.credentialQuery.claims as List<JsonRequestedClaim>
+        Logger.i(
+            TAG,
+            "sdjwt present queryId=${match.source.credentialQuery.id} " +
+                "credential=${summarizeCredential(sdjwtVcCredential)} " +
+                "claimPaths=${claims.joinToString(separator = ",") { it.claimPath.joinToString(separator = "/") }}"
+        )
 
         val sdJwt = SdJwt.fromCompactSerialization(sdjwtVcCredential.issuerProvidedData.decodeToString())
         val pathsToDisclose = claims.map { claim: JsonRequestedClaim -> claim.claimPath }
         val filteredSdJwt = sdJwt.filter(pathsToDisclose)
+        val filteredIssuerKey = filteredSdJwt.x5c?.certificates?.firstOrNull()?.ecPublicKey
+        val filteredClaimKeys = runCatching {
+            if (filteredIssuerKey == null) {
+                "-"
+            } else {
+                filteredSdJwt.verify(filteredIssuerKey).keys.sorted().joinToString(",")
+            }
+        }.getOrElse { error -> "error:${error::class.simpleName}" }
+        val filteredNestedRoots = runCatching {
+            if (filteredIssuerKey == null) {
+                "-"
+            } else {
+                filteredSdJwt.verify(filteredIssuerKey).entries
+                    .mapNotNull { (key, value) -> if (value is JsonObject) key else null }
+                    .sorted()
+                    .joinToString(",")
+            }
+        }.getOrElse { error -> "error:${error::class.simpleName}" }
+        Logger.i(
+            TAG,
+            "sdjwt filtered queryId=${match.source.credentialQuery.id} " +
+                "segments=${filteredSdJwt.compactSerialization.split("~").size - 1} " +
+                "claimKeys=$filteredClaimKeys nestedRoots=$filteredNestedRoots"
+        )
 
         (sdjwtVcCredential as Credential).increaseUsageCount()
         return if (sdjwtVcCredential is SecureAreaBoundCredential) {
@@ -755,6 +802,40 @@ object OpenID4VP {
             }.compactSerialization
         } else {
             filteredSdJwt.compactSerialization
+        }
+    }
+
+    private fun summarizeMatch(match: CredentialPresentmentSetOptionMemberMatch): String {
+        val source = match.source as CredentialMatchSourceOpenID4VP
+        return buildString {
+            append("queryId=")
+            append(source.credentialQuery.id)
+            append(",format=")
+            append(source.credentialQuery.format)
+            append(",credential=")
+            append(summarizeCredential(match.credential))
+            append(",claims=")
+            append(
+                source.credentialQuery.claims.joinToString(separator = "|") { claim ->
+                    summarizeRequestedClaim(claim)
+                }
+            )
+        }
+    }
+
+    private fun summarizeCredential(credential: Any): String {
+        return when (credential) {
+            is MdocCredential -> "mdoc:docType=${credential.docType}"
+            is SdJwtVcCredential -> "sdjwt:vct=${credential.vct}"
+            else -> credential::class.simpleName ?: "credential"
+        }
+    }
+
+    private fun summarizeRequestedClaim(claim: RequestedClaim): String {
+        return when (claim) {
+            is JsonRequestedClaim -> claim.claimPath.joinToString(separator = "/")
+            is MdocRequestedClaim -> "${claim.namespaceName}/${claim.dataElementName}"
+            else -> claim.toString()
         }
     }
 }

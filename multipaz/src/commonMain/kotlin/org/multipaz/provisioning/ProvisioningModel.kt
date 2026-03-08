@@ -135,6 +135,7 @@ class ProvisioningModel(
                 val provisioningClient = provisioningClientFactory.invoke()
                 runProvisioning(provisioningClient)
             } catch(err: CancellationException) {
+                Logger.w(TAG, "Provisioning cancelled", err)
                 mutableState.emit(Idle)
                 throw err
             } catch(err: Throwable) {
@@ -154,6 +155,7 @@ class ProvisioningModel(
      * function returns.
      */
     fun cancel() {
+        Logger.w(TAG, "ProvisioningModel.cancel() invoked", IllegalStateException("cancel caller trace"))
         job?.let {
             if (it.isActive) {
                 it.cancel()
