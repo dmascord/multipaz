@@ -24,6 +24,13 @@ java {
     targetCompatibility = JavaVersion.VERSION_17
 }
 
+// Force the annotations version to resolve conflict between Kotlin stdlib (13.0) and Koog (26.0.2)
+configurations.all {
+    resolutionStrategy {
+        force("org.jetbrains:annotations:26.0.2")
+    }
+}
+
 // CRITICAL: Create a separate configuration for worker classpath isolation
 // This ensures the worker JVM gets its own classpath with Koog dependencies
 // independent from Gradle's embedded Kotlin runtime

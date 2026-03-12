@@ -1,15 +1,22 @@
 import org.apache.commons.io.output.ByteArrayOutputStream
 import org.jetbrains.dokka.gradle.engine.parameters.VisibilityModifier
+import java.io.BufferedReader
+import java.io.InputStreamReader
 
 // For `versionCode` we just use the number of commits.
 val projectVersionCode: Int by extra {
-    val stdout = ByteArrayOutputStream()
-    rootProject.exec {
-        commandLine("git", "rev-list", "HEAD", "--count")
-        standardOutput = stdout
+    try {
+        val process = ProcessBuilder("git", "rev-list", "HEAD", "--count")
+            .directory(file("."))
+            .redirectErrorStream(true)
+            .start()
+        val reader = BufferedReader(InputStreamReader(process.inputStream))
+        val output = reader.readText().trim()
+        process.waitFor()
+        output.toIntOrNull() ?: 1
+    } catch (e: Exception) {
+        1
     }
-    @Suppress("DEPRECATION") // toString() is deprecated.
-    stdout.toString().trim().toInt()
 }
 
 // The version number of the project.
@@ -21,12 +28,18 @@ val projectVersionLast = "0.97.0"
 val projectVersionNext = "0.98.0"
 
 private fun runCommand(args: List<String>): String {
-    val stdout = ByteArrayOutputStream()
-    rootProject.exec {
-        commandLine(args)
-        standardOutput = stdout
+    return try {
+        val process = ProcessBuilder(args)
+            .directory(file("."))
+            .redirectErrorStream(true)
+            .start()
+        val reader = BufferedReader(InputStreamReader(process.inputStream))
+        val output = reader.readText().trim()
+        process.waitFor()
+        output
+    } catch (e: Exception) {
+        ""
     }
-    return stdout.toString().trim()
 }
 
 // Generate a project version meeting the requirements of Semantic Versioning 2.0.0
