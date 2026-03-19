@@ -506,6 +506,8 @@ object OpenID4VP {
             }
         }
         Logger.iJson(TAG, "vpToken", vpToken)
+        // Extra logging for B test - capture vpToken keys
+        Logger.i(TAG, "B_TEST_vpToken: keys=${vpToken.jsonObject.keys.joinToString(",")}")
 
         // If using ZKP the response will be huge so compression helps
         val compressionLevel = if (usingZk) 9 else null
@@ -528,6 +530,9 @@ object OpenID4VP {
         } else {
             vpToken.jsonObject
         }
+        Logger.iJson(TAG, "directPostJwtClaims", directPostJwtClaims)
+        // Extra logging for B test comparison
+        Logger.i(TAG, "B_TEST_extra: nonce=$nonce clientId=$clientId responseMode=$responseMode")
         return if (reReaderPublicKey != null) {
             buildJsonObject {
                 put("response",
@@ -689,6 +694,8 @@ object OpenID4VP {
         )
         Logger.iCbor(TAG, "handoverInfo", handoverInfo)
         Logger.iCbor(TAG, "encodedSessionTranscript", encodedSessionTranscript)
+        // Extra logging for B test - capture key values
+        Logger.i(TAG, "B_TEST_openID4VPMsoMdoc: clientId=$clientId nonce=$nonce handoverString=$handoverString")
 
         val mdocCredential = match.credential as MdocCredential
         val document = MdocDocument.fromPresentment(
