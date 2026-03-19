@@ -531,17 +531,24 @@ object OpenID4VP {
             vpToken.jsonObject
         }
         Logger.iJson(TAG, "directPostJwtClaims", directPostJwtClaims)
-        // Write full payload to file for A/B comparison
+        // Write full payload to logcat in chunks for A/B comparison
         try {
             val payloadJson = directPostJwtClaims.toString()
+            val chunkSize = 4000
             val timestamp = Clock.System.now().toEpochMilliseconds()
-            // Use java.io.File for Android compatibility
-            val file = java.io.File("/data/data/org.multipaz.testapp.blr/files/vp_payload_${timestamp}_${nonce.take(8)}.json")
-            file.parentFile?.mkdirs()
-            file.writeText(payloadJson)
-            Logger.i(TAG, "B_TEST_full_payload: written to ${file.absolutePath} size=${payloadJson.length}")
+            Logger.i(TAG, "B_TEST_full_payload_START: nonce=$nonce size=${payloadJson.length} timestamp=$timestamp")
+            var offset = 0
+            var chunkNum = 0
+            while (offset < payloadJson.length) {
+                val end = minOf(offset + chunkSize, payloadJson.length)
+                val chunk = payloadJson.substring(offset, end)
+                Logger.i(TAG, "B_TEST_full_payload_chunk$chunkNum: ${chunk}")
+                offset = end
+                chunkNum++
+            }
+            Logger.i(TAG, "B_TEST_full_payload_END: nonce=$nonce chunks=$chunkNum")
         } catch (e: Exception) {
-            Logger.w(TAG, "B_TEST_full_payload: failed to write: ${e.message}")
+            Logger.w(TAG, "B_TEST_full_payload: failed: ${e.message}")
         }
         // Extra logging for B test comparison
         Logger.i(TAG, "B_TEST_extra: nonce=$nonce clientId=$clientId responseMode=$responseMode")

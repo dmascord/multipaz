@@ -140,8 +140,7 @@ private suspend fun digitalCredentialsOpenID4VPProtocol(
     source: PresentmentSource,
 ): JsonObject {
     val version = when (protocol) {
-        "openid4vp" -> OpenID4VP.Version.DRAFT_24
-        "openid4vp-v1-unsigned", "openid4vp-v1-signed" -> OpenID4VP.Version.DRAFT_29
+        "openid4vp", "openid4vp-v1-unsigned", "openid4vp-v1-signed" -> OpenID4VP.Version.DRAFT_29
         else -> throw IllegalStateException("Unexpected protocol ${protocol}")
     }
     var requesterCertChain: X509CertChain? = null
