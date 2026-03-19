@@ -531,6 +531,18 @@ object OpenID4VP {
             vpToken.jsonObject
         }
         Logger.iJson(TAG, "directPostJwtClaims", directPostJwtClaims)
+        // Write full payload to file for A/B comparison
+        try {
+            val payloadJson = directPostJwtClaims.toString()
+            val timestamp = Clock.System.now().toEpochMilliseconds()
+            // Use java.io.File for Android compatibility
+            val file = java.io.File("/data/data/org.multipaz.testapp.blr/files/vp_payload_${timestamp}_${nonce.take(8)}.json")
+            file.parentFile?.mkdirs()
+            file.writeText(payloadJson)
+            Logger.i(TAG, "B_TEST_full_payload: written to ${file.absolutePath} size=${payloadJson.length}")
+        } catch (e: Exception) {
+            Logger.w(TAG, "B_TEST_full_payload: failed to write: ${e.message}")
+        }
         // Extra logging for B test comparison
         Logger.i(TAG, "B_TEST_extra: nonce=$nonce clientId=$clientId responseMode=$responseMode")
         return if (reReaderPublicKey != null) {
