@@ -230,16 +230,20 @@ data class MobileSecurityObject(
                 return Instant.parse(taggedItem.value)
             }
             if (item is Tstr && compatibilityOptions.allowLegacyMsoValidityTimestamps) {
+                // TODO: remove after 2026-07-01 — SITA issuer emits ValidityInfo timestamps
+                // without CBOR tag 0 (tdate) for compatibility with the NEC verifier deployed
+                // at Hong Kong International Airport (HKG). Remove once NEC verifier is updated
+                // to accept canonical tdate-tagged timestamps per ISO/IEC 18013-5 §9.1.2.
                 Logger.w(
                     TAG,
-                    "Allowing legacy untagged ValidityInfo.$fieldName timestamp; remove after 2026-07-01"
+                    "Allowing legacy untagged ValidityInfo.$fieldName timestamp (HKG/NEC compat); remove after 2026-07-01"
                 )
                 return Instant.parse(item.value)
             }
             if (compatibilityOptions.allowLegacyMsoValidityTimestamps) {
                 Logger.w(
                     TAG,
-                    "Allowing legacy ValidityInfo.$fieldName timestamp encoded as ${item::class.simpleName}"
+                    "Allowing legacy ValidityInfo.$fieldName timestamp encoded as ${item::class.simpleName} (HKG/NEC compat)"
                 )
                 return item.asDateTimeString
             }
