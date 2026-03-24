@@ -12,6 +12,7 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import org.multipaz.provisioning.SecretCodeRequest
+import org.multipaz.rpc.backend.BackendEnvironment
 import org.multipaz.util.Logger
 
 /**
@@ -72,7 +73,9 @@ internal sealed class CredentialOffer {
                     if (url == null) {
                         throw IllegalStateException("Neither 'credential_offer' nor 'credential_offer_uri' are given")
                     }
-                    val response = HttpClient().get(url) {}
+                    val httpClient = BackendEnvironment.getInterface(HttpClient::class)
+                        ?: HttpClient()
+                    val response = httpClient.get(url) {}
                     if (response.status != HttpStatusCode.OK) {
                         throw IllegalStateException("Error retrieving '$url'")
                     }
