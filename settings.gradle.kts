@@ -1,10 +1,6 @@
 rootProject.name = "MultipazProject"
 enableFeaturePreview("TYPESAFE_PROJECT_ACCESSORS")
 
-// Skip multipaz-compose to avoid Koog/Kotlin annotations version conflict
-// This is a temporary workaround until the dependency conflict is resolved
-val skipCompose = System.getenv("MULTIPAZ_SKIP_COMPOSE")?.toBoolean() ?: false
-
 // As per https://www.jetbrains.com/help/kotlin-multiplatform-dev/compose-test.html#-o0tm8i_54
 // "Currently, you cannot run common Compose Multiplatform tests using android (local) test
 // configurations, so gutter icons in Android Studio, for example, won't be helpful."
