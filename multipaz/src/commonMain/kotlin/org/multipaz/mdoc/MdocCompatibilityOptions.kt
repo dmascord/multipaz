@@ -1,5 +1,10 @@
 package org.multipaz.mdoc
 
+enum class OpenId4VpDraft18TranscriptMode {
+    CREDO,
+    GENERATED_NONCE_THIRD_ENTRY,
+}
+
 /**
  * Compatibility toggles for ISO 18013-5 parsing/verification.
  */
@@ -19,4 +24,15 @@ data class MdocCompatibilityOptions(
      * Disabled by default so we fail fast when issuers violate the spec.
      */
     val allowLegacyMsoPayloadWithoutTag24: Boolean = false,
+    /**
+     * Controls the legacy OpenID4VP Draft 18 / ISO 18013-7 redirect session-transcript layout.
+     *
+     * `CREDO` matches the public Credo/Paradym model:
+     * `[sha256(cbor([clientId, mdocGeneratedNonce])), sha256(cbor([responseUri, mdocGeneratedNonce])), verifierNonce]`
+     *
+     * `GENERATED_NONCE_THIRD_ENTRY` keeps the hashed pair inputs the same, but places the
+     * wallet-generated nonce in the third array slot. This is an experimental interoperability
+     * fallback for verifiers that appear to compare JWE `apu` against the transcript's third value.
+     */
+    val openId4VpDraft18TranscriptMode: OpenId4VpDraft18TranscriptMode = OpenId4VpDraft18TranscriptMode.CREDO,
 )

@@ -31,6 +31,9 @@ import org.multipaz.crypto.JsonWebEncryption
 import org.multipaz.crypto.AsymmetricKey
 import org.multipaz.crypto.X509CertChain
 import org.multipaz.document.Document
+import org.multipaz.document.NameSpacedData
+import org.multipaz.mdoc.MdocCompatibilityDefaults
+import org.multipaz.mdoc.OpenId4VpDraft18TranscriptMode
 import org.multipaz.webtoken.buildJwt
 import org.multipaz.mdoc.credential.MdocCredential
 import org.multipaz.mdoc.response.DeviceResponse
@@ -69,6 +72,11 @@ object OpenID4VP {
         DIRECT_POST,
         DC_API,
     }
+
+    data class GeneratedResponse(
+        val response: JsonObject,
+        val generatedVpNonce: String? = null,
+    )
 
     /**
      * Generates an OpenID4VP request.
@@ -295,6 +303,32 @@ object OpenID4VP {
         request: JsonObject,
         requesterCertChain: X509CertChain?,
     ): JsonObject {
+        return generateResponseWithDiagnostics(
+            version = version,
+            preselectedDocuments = preselectedDocuments,
+            source = source,
+            appId = appId,
+            origin = origin,
+            request = request,
+            requesterCertChain = requesterCertChain,
+        ).response
+    }
+
+    @Throws(
+        CancellationException::class,
+        IllegalStateException::class,
+        PresentmentCanceled::class
+    )
+    @OptIn(ExperimentalEncodingApi::class)
+    suspend fun generateResponseWithDiagnostics(
+        version: Version,
+        preselectedDocuments: List<Document>,
+        source: PresentmentSource,
+        appId: String?,
+        origin: String?,
+        request: JsonObject,
+        requesterCertChain: X509CertChain?,
+    ): GeneratedResponse {
         Logger.iJson(TAG, "request", request)
 
         val nonce = request["nonce"]!!.jsonPrimitive.content
@@ -437,6 +471,7 @@ object OpenID4VP {
                 }
         )
 
+        val walletGeneratedNonce = Random.nextBytes(16).toBase64Url()
         var usingZk = false
         selection.matches.forEach { match ->
             match.source as CredentialMatchSourceOpenID4VP
@@ -452,6 +487,7 @@ object OpenID4VP {
                     origin = origin,
                     clientId = clientId,
                     nonce = nonce,
+                    walletGeneratedNonce = walletGeneratedNonce,
                     reReaderPublicKey = reReaderPublicKey,
                     responseUri = responseUri,
                     requestIsForZk = requestIsForZk
@@ -512,7 +548,6 @@ object OpenID4VP {
         // If using ZKP the response will be huge so compression helps
         val compressionLevel = if (usingZk) 9 else null
 
-        val walletGeneratedNonce = Random.nextBytes(16).toBase64Url()
         val directPostJwtClaims = if (responseMode == ResponseMode.DIRECT_POST && reReaderPublicKey != null) {
             val nowEpochSeconds = Clock.System.now().toEpochMilliseconds() / 1000
             buildJsonObject {
@@ -553,21 +588,27 @@ object OpenID4VP {
         // Extra logging for B test comparison
         Logger.i(TAG, "B_TEST_extra: nonce=$nonce clientId=$clientId responseMode=$responseMode")
         return if (reReaderPublicKey != null) {
-            buildJsonObject {
-                put("response",
-                    JsonWebEncryption.encrypt(
-                        claimsSet = directPostJwtClaims,
-                        recipientPublicKey = reReaderPublicKey,
-                        encAlg = reEncAlg,
-                        apu = nonce.encodeToByteString(),
-                        apv = walletGeneratedNonce.encodeToByteString(),
-                        kid = reKid,
-                        compressionLevel = compressionLevel
+            GeneratedResponse(
+                response = buildJsonObject {
+                    put("response",
+                        JsonWebEncryption.encrypt(
+                            claimsSet = directPostJwtClaims,
+                            recipientPublicKey = reReaderPublicKey,
+                            encAlg = reEncAlg,
+                            apu = nonce.encodeToByteString(),
+                            apv = walletGeneratedNonce.encodeToByteString(),
+                            kid = reKid,
+                            compressionLevel = compressionLevel
+                        )
                     )
-                )
-            }
+                },
+                generatedVpNonce = walletGeneratedNonce
+            )
         } else {
-            vpToken
+            GeneratedResponse(
+                response = vpToken,
+                generatedVpNonce = if (version == Version.DRAFT_24 && responseUri != null) walletGeneratedNonce else null
+            )
         }
     }
 
@@ -610,10 +651,12 @@ object OpenID4VP {
         origin: String?,
         clientId: String,
         nonce: String,
+        walletGeneratedNonce: String,
         reReaderPublicKey: EcPublicKey?,
         responseUri: String?,
         requestIsForZk: Boolean
     ): String {
+        val draft18TranscriptMode = MdocCompatibilityDefaults.current().openId4VpDraft18TranscriptMode
         match.source as CredentialMatchSourceOpenID4VP
         var zkSystemMatch: ZkSystem? = null
         var zkSystemSpec: ZkSystemSpec? = null
@@ -661,62 +704,90 @@ object OpenID4VP {
         val reReaderPublicKeJwkThumbprint = reReaderPublicKey?.let {
             it.toJwkThumbprint(Algorithm.SHA256).toByteArray()
         }
-        val handoverInfo = Cbor.encode(
-            when (version) {
-                Version.DRAFT_29 -> {
-                    buildCborArray {
-                        val jwkThumbPrint = if (reReaderPublicKeJwkThumbprint == null) {
-                            Simple.NULL
-                        } else {
-                            Bstr(reReaderPublicKeJwkThumbprint)
-                        }
-                        if (responseUri != null) {
-                            // B.2.6.1. Invocation via Redirects
-                            add(clientId)
-                            add(nonce)
-                            add(jwkThumbPrint)
-                            add(responseUri)
-                        } else {
-                            // B.2.6.2. Invocation via the Digital Credentials API
-                            add(origin!!)
-                            add(nonce)
-                            add(jwkThumbPrint)
-                        }
+        val handoverInfo = when (version) {
+            Version.DRAFT_29 -> {
+                buildCborArray {
+                    val jwkThumbPrint = if (reReaderPublicKeJwkThumbprint == null) {
+                        Simple.NULL
+                    } else {
+                        Bstr(reReaderPublicKeJwkThumbprint)
+                    }
+                    if (responseUri != null) {
+                        // B.2.6.1. Invocation via Redirects
+                        add(clientId)
+                        add(nonce)
+                        add(jwkThumbPrint)
+                        add(responseUri)
+                    } else {
+                        // B.2.6.2. Invocation via the Digital Credentials API
+                        add(origin!!)
+                        add(nonce)
+                        add(jwkThumbPrint)
                     }
                 }
-                Version.DRAFT_24 -> {
-                    buildCborArray {
+            }
+            Version.DRAFT_24 -> {
+                buildCborArray {
+                    if (responseUri != null) {
+                        add(Bstr(Crypto.digest(Algorithm.SHA256, Cbor.encode(buildCborArray {
+                            add(clientId)
+                            add(walletGeneratedNonce)
+                        }))))
+                        add(Bstr(Crypto.digest(Algorithm.SHA256, Cbor.encode(buildCborArray {
+                            add(responseUri)
+                            add(walletGeneratedNonce)
+                        }))))
+                        add(
+                            when (draft18TranscriptMode) {
+                                OpenId4VpDraft18TranscriptMode.CREDO -> nonce
+                                OpenId4VpDraft18TranscriptMode.GENERATED_NONCE_THIRD_ENTRY -> walletGeneratedNonce
+                            }
+                        )
+                    } else {
                         add(origin!!)
                         add(clientId)
                         add(nonce)
                     }
                 }
             }
-        )
-        Logger.iCbor(TAG, "handoverInfo", handoverInfo)
-
-        val handoverString = if (responseUri != null) {
-            "OpenID4VPHandover"
-        } else {
-            "OpenID4VPDCAPIHandover"
         }
-        val handoverInfoDigest = Crypto.digest(Algorithm.SHA256, handoverInfo)
+        Logger.iCbor(TAG, "handoverInfo", Cbor.encode(handoverInfo))
+
         val encodedSessionTranscript = Cbor.encode(
             buildCborArray {
                 add(Simple.NULL) // DeviceEngagementBytes
                 add(Simple.NULL) // EReaderKeyBytes
-                addCborArray {
-                    add(handoverString)
-                    add(handoverInfoDigest)
+                when {
+                    version == Version.DRAFT_24 && responseUri != null -> add(handoverInfo)
+                    else -> {
+                        val handoverString = if (responseUri != null) {
+                            "OpenID4VPHandover"
+                        } else {
+                            "OpenID4VPDCAPIHandover"
+                        }
+                        val handoverInfoDigest = Crypto.digest(Algorithm.SHA256, Cbor.encode(handoverInfo))
+                        addCborArray {
+                            add(handoverString)
+                            add(handoverInfoDigest)
+                        }
+                    }
                 }
             }
         )
-        Logger.iCbor(TAG, "handoverInfo", handoverInfo)
         Logger.iCbor(TAG, "encodedSessionTranscript", encodedSessionTranscript)
         // Extra logging for B test - capture key values
-        Logger.i(TAG, "B_TEST_openID4VPMsoMdoc: clientId=$clientId nonce=$nonce handoverString=$handoverString")
+        Logger.i(TAG, "B_TEST_openID4VPMsoMdoc: clientId=$clientId nonce=$nonce walletGeneratedNonce=$walletGeneratedNonce version=$version responseUri=${responseUri ?: "-"} transcriptMode=$draft18TranscriptMode")
 
         val mdocCredential = match.credential as MdocCredential
+        mdocCredential.increaseUsageCount()
+        if (zkSystemMatch == null) {
+            return generateLegacyOpenId4VpMsoMdoc(
+                encodedSessionTranscript = encodedSessionTranscript,
+                credential = mdocCredential,
+                requestedClaims = match.source.credentialQuery.claims as List<MdocRequestedClaim>
+            ).toBase64Url()
+        }
+
         val document = MdocDocument.fromPresentment(
             sessionTranscript = Cbor.decode(encodedSessionTranscript),
             credential = mdocCredential,
@@ -726,20 +797,54 @@ object OpenID4VP {
             sessionTranscript = Cbor.decode(encodedSessionTranscript),
             status = DeviceResponse.STATUS_OK,
         ) {
-            if (zkSystemMatch != null) {
-                val zkDocument = zkSystemMatch.generateProof(
-                    zkSystemSpec = zkSystemSpec!!,
-                    document = document,
-                    sessionTranscript = sessionTranscript
-                )
-                Logger.i(TAG, "ZK Proof Size: ${zkDocument.proof.size}")
-                addZkDocument(zkDocument)
-            } else {
-                addDocument(document)
+            val zkDocument = zkSystemMatch.generateProof(
+                zkSystemSpec = zkSystemSpec!!,
+                document = document,
+                sessionTranscript = sessionTranscript
+            )
+            Logger.i(TAG, "ZK Proof Size: ${zkDocument.proof.size}")
+            addZkDocument(zkDocument)
+        }
+        return Cbor.encode(deviceResponse.toDataItem()).toBase64Url()
+    }
+
+    @Suppress("DEPRECATION")
+    private suspend fun generateLegacyOpenId4VpMsoMdoc(
+        encodedSessionTranscript: ByteArray,
+        credential: MdocCredential,
+        requestedClaims: List<MdocRequestedClaim>
+    ): ByteArray {
+        val filteredIssuerNamespaces = credential.issuerNamespaces.filter(requestedClaims)
+        val deviceNamespaces = buildLegacyNameSpacedData(org.multipaz.mdoc.devicesigned.buildDeviceNamespaces {})
+        val documentGenerator = org.multipaz.mdoc.response.DocumentGenerator(
+            credential.docType,
+            Cbor.encode(credential.issuerAuth.toDataItem()),
+            encodedSessionTranscript
+        )
+        documentGenerator.setIssuerNamespaces(filteredIssuerNamespaces)
+        val encodedDocument = documentGenerator
+            .setDeviceNamespacesSignature(
+                dataElements = deviceNamespaces,
+                secureArea = credential.secureArea,
+                keyAlias = credential.alias,
+                unlockReason = PresentmentUnlockReason(credential)
+            )
+            .generate()
+        return org.multipaz.mdoc.response.DeviceResponseGenerator(DeviceResponse.STATUS_OK.toLong())
+            .addDocument(encodedDocument)
+            .generate()
+    }
+
+    private fun buildLegacyNameSpacedData(
+        deviceNamespaces: org.multipaz.mdoc.devicesigned.DeviceNamespaces
+    ): NameSpacedData {
+        val builder = NameSpacedData.Builder()
+        deviceNamespaces.data.forEach { (namespaceName, entries) ->
+            entries.forEach { (dataElementName, dataElementValue) ->
+                builder.putEntry(namespaceName, dataElementName, Cbor.encode(dataElementValue))
             }
         }
-        mdocCredential.increaseUsageCount()
-        return Cbor.encode(deviceResponse.toDataItem()).toBase64Url()
+        return builder.build()
     }
 
     private suspend fun openID4VPSdJwt(
