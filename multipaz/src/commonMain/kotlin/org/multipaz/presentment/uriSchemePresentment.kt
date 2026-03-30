@@ -132,12 +132,12 @@ suspend fun uriSchemePresentment(
         val headerJson = runCatching {
             responseCs.substringBefore('.').fromBase64Url().decodeToString()
         }.getOrNull()
-        Logger.i(TAG, "ANNEX_E responseCsHeader=${headerJson ?: "-"}")
-        Logger.i(TAG, "ANNEX_E responseCsLength=${responseCs.length} state=${state ?: "-"}")
+        Logger.i(TAG, "OID4VP_SUBMIT responseCsHeader=${headerJson ?: "-"}")
+        Logger.i(TAG, "OID4VP_SUBMIT responseCsLength=${responseCs.length} state=${state ?: "-"}")
     }
     Logger.i(
         TAG,
-        "ANNEX_E formBody=${Parameters.build { append("response", responseCs); state?.let { append("state", it) } }.formUrlEncode()}"
+        "OID4VP_SUBMIT responseUri=$responseUri formBody=${Parameters.build { append("response", responseCs); state?.let { append("state", it) } }.formUrlEncode()}"
     )
 
     val postResponseResponse = httpClient.post(responseUri) {
