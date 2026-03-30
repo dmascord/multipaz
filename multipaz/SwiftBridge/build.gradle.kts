@@ -2,6 +2,11 @@ import org.jetbrains.kotlin.konan.target.HostManager
 
 if (HostManager.hostIsMac) {
     listOf("iphoneos", "iphonesimulator").forEach { sdk ->
+        val destination = when (sdk) {
+            "iphoneos" -> "generic/platform=iOS"
+            "iphonesimulator" -> "generic/platform=iOS Simulator"
+            else -> error("Unsupported sdk $sdk")
+        }
         @Suppress("DEPRECATION") // The capitalize() is deprecated.
         tasks.create<Exec>("build${sdk.capitalize()}") {
             group = "build"
@@ -11,6 +16,7 @@ if (HostManager.hostIsMac) {
                 "-project", "SwiftBridge.xcodeproj",
                 "-scheme", "SwiftBridge",
                 "-sdk", sdk,
+                "-destination", destination,
                 "-configuration", "Release",
                 "SYMROOT=${projectDir}/build"
             )
@@ -32,4 +38,3 @@ tasks.create<Delete>("clean") {
 
     delete("$projectDir/build")
 }
-

@@ -20,6 +20,7 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
+import org.multipaz.cbor.DiagnosticOption
 import org.multipaz.cbor.Bstr
 import org.multipaz.cbor.Cbor
 import org.multipaz.cbor.Simple
@@ -126,6 +127,18 @@ suspend fun uriSchemePresentment(
     }
     val state = response["state"]?.jsonPrimitive?.content?.takeIf { it.isNotBlank() }
         ?: requestObject["state"]?.jsonPrimitive?.content?.takeIf { it.isNotBlank() }
+
+    if (requestObject["response_mode"]!!.jsonPrimitive.content == "direct_post.jwt") {
+        val headerJson = runCatching {
+            responseCs.substringBefore('.').fromBase64Url().decodeToString()
+        }.getOrNull()
+        Logger.i(TAG, "ANNEX_E responseCsHeader=${headerJson ?: "-"}")
+        Logger.i(TAG, "ANNEX_E responseCsLength=${responseCs.length} state=${state ?: "-"}")
+    }
+    Logger.i(
+        TAG,
+        "ANNEX_E formBody=${Parameters.build { append("response", responseCs); state?.let { append("state", it) } }.formUrlEncode()}"
+    )
 
     val postResponseResponse = httpClient.post(responseUri) {
         contentType(ContentType.Application.FormUrlEncoded)

@@ -620,6 +620,15 @@ object OpenID4VP {
             "A192GCM" to Algorithm.A192GCM,
             "A256GCM" to Algorithm.A256GCM,
         )
+        clientMetadata["authorization_encrypted_response_enc"]
+            ?.jsonPrimitive
+            ?.content
+            ?.let { explicitEnc ->
+                return supportedByWallet[explicitEnc]
+                    ?: throw IllegalStateException(
+                        "Unsupported authorization_encrypted_response_enc '$explicitEnc'"
+                    )
+            }
         val advertisedEncValues = sequenceOf(
             "encrypted_response_enc_values_supported",
             "authorization_encrypted_response_enc_values_supported"

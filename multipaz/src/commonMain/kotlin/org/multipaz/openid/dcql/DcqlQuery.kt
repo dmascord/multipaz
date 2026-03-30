@@ -28,6 +28,7 @@ import org.multipaz.request.MdocRequestedClaim
 import org.multipaz.request.RequestedClaim
 import org.multipaz.sdjwt.credential.SdJwtVcCredential
 import org.multipaz.util.Logger
+import org.multipaz.util.toBase64Url
 import kotlin.coroutines.cancellation.CancellationException
 
 private data class QueryResponse(
@@ -145,6 +146,15 @@ data class DcqlQuery(
             val matches = mutableListOf<QueryResponseMatch>()
             // We sort on displayName b/c otherwise it's sorted on Document.identifier which can be unpredictable
             for (cred in credsSatisfyingMeta.sortedBy { it.document.displayName }) {
+                if (!credentialQuery.matchesTrustedAuthorities(cred)) {
+                    Logger.i(
+                        TAG,
+                        "trusted_authorities reject queryId=${credentialQuery.id} credential=${summarizeCredential(cred)} " +
+                            "requested=${credentialQuery.trustedAuthorityAkiValues.joinToString(",").ifBlank { "-" }} " +
+                            "actual=${credentialAuthorityAki(cred) ?: "-"}"
+                    )
+                    continue
+                }
                 val claimsInCredential =
                     cred.getClaims(documentTypeRepository = presentmentSource.documentTypeRepository)
                 if (credentialQuery.claimSets.isEmpty()) {
@@ -418,12 +428,13 @@ data class DcqlQuery(
                     }
                 }
 
-                /*
-                 * TODO: add support for
-                 * - multiple
-                 * - trusted_authorities
-                 * - require_cryptographic_holder_binding
-                 */
+                val trustedAuthorityAkiValues = (c["trusted_authorities"]?.jsonArray ?: emptyList()).mapNotNull { authority ->
+                    val authorityObject = authority.jsonObject
+                    if (authorityObject["type"]?.jsonPrimitive?.content != "aki") {
+                        return@mapNotNull null
+                    }
+                    authorityObject["values"]?.jsonArray?.mapNotNull { it.jsonPrimitive.content }.orEmpty()
+                }.flatten()
                 dcqlCredentialQueries.add(
                     DcqlCredentialQuery(
                         id = id,
@@ -431,6 +442,7 @@ data class DcqlQuery(
                         meta = meta,
                         mdocDocType = mdocDocType,
                         vctValues = vctValues,
+                        trustedAuthorityAkiValues = trustedAuthorityAkiValues,
                         claims = dcqlClaims,
                         claimSets = dcqlClaimSets,
                         claimIdToClaim = dcqlClaimIdToClaim
@@ -489,6 +501,39 @@ private fun DcqlCredentialQuery.toJson(): JsonObject = buildJsonObject {
                 }
             }
         }
+    }
+    if (trustedAuthorityAkiValues.isNotEmpty()) {
+        putJsonArray("trusted_authorities") {
+            add(buildJsonObject {
+                put("type", "aki")
+                putJsonArray("values") {
+                    trustedAuthorityAkiValues.forEach { add(it) }
+                }
+            })
+        }
+    }
+}
+
+private fun DcqlCredentialQuery.matchesTrustedAuthorities(credential: Credential): Boolean {
+    if (trustedAuthorityAkiValues.isEmpty()) {
+        return true
+    }
+    val authorityAki = credentialAuthorityAki(credential) ?: return false
+    return trustedAuthorityAkiValues.contains(authorityAki)
+}
+
+private fun credentialAuthorityAki(credential: Credential): String? {
+    val mdocCredential = credential as? MdocCredential ?: return null
+    return mdocCredential.issuerCertChain.certificates.firstOrNull()
+        ?.authorityKeyIdentifier
+        ?.toBase64Url()
+}
+
+private fun summarizeCredential(credential: Credential): String {
+    return when (credential) {
+        is MdocCredential -> credential.docType
+        is SdJwtVcCredential -> credential.vct
+        else -> credential.document.displayName ?: credential.document.identifier
     }
 }
 

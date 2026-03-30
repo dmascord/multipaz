@@ -14,6 +14,7 @@ import org.multipaz.request.RequestedClaim
  * @property vctValues the array of Verifiable Credential Types or `null` if format isn't `dc+sd-jwt`.
  * @property claims a list of claims being requested.
  * @property claimSets a list of claim sets.
+ * @property trustedAuthorityAkiValues requested trusted authority AKI values, base64url-encoded.
  */
 data class DcqlCredentialQuery(
     val id: String,
@@ -23,6 +24,7 @@ data class DcqlCredentialQuery(
     // from meta
     val mdocDocType: String? = null,
     val vctValues: List<String>? = null,
+    val trustedAuthorityAkiValues: List<String> = emptyList(),
 
     val claims: List<RequestedClaim>,
     val claimSets: List<DcqlClaimSet>,
